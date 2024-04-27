@@ -9,6 +9,8 @@ import util.dataprocess
 import util.clustering_util
 import Fair_Lloyd
 import util.optimal_centers
+from sklearn.metrics import silhouette_score
+from sklearn.metrics import davies_bouldin_score
 def main():
     # 数据集所在文件夹
     config_root = 'Resource'
@@ -47,7 +49,15 @@ def main():
     result_list = [np.zeros(len(df_fair_column.unique())) for _ in k_number ]
     result_list = np.array(result_list)
     kmeans_result_list = [np.zeros(len(df_fair_column.unique())) for _ in k_number]
-    kmeans_result_list = np.array(result_list)
+    kmeans_result_list = np.array(kmeans_result_list)
+
+    fair_silhouette_list = np.zeros(len(k_number))
+    kmeans_silhouette_list = np.zeros(len(k_number))
+
+    fair_DB_list = np.zeros(len(k_number))
+    kmeans_DB_list = np.zeros(len(k_number))
+
+
     #寻找当前最优中心点使用的参数
     epsilon = config_parser[config_name].getfloat('epsilon')
     T = config_parser[config_name].getint('T')
@@ -61,6 +71,11 @@ def main():
     Fair_Lloyd_fig = 'Result\\'+config_name+'_'+fair_column + '_' + str(enum_number) + '_' + str(k_number_min) + '_' + str(
         k_number_max) + 'Fair_Lloyd_cost.png'
 
+    silhouette_fig = 'Result\\'+config_name+'_'+fair_column + '_' + str(enum_number) + '_' + str(k_number_min) + '_' + str(
+        k_number_max) + 'silhouette.png'
+
+    DB_fig = 'Result\\'+config_name+'_'+fair_column + '_' + str(enum_number) + '_' + str(k_number_min) + '_' + str(
+        k_number_max) + 'DB.png'
     if PCAUse:
         pca_number = config_parser[config_name].getint('PCA_number')
         pca = PCA(n_components=pca_number)
@@ -75,16 +90,29 @@ def main():
             cost_group = util.clustering_util.caculate_cost(cluster_number,data,centroids,group_index,assignment,name2ix,unique_values)
             kmeans_cost_group = util.clustering_util.caculate_cost(cluster_number,data,kmeans_centroids,group_index,kmeans_assign,name2ix,unique_values)
             kmeans_result_list[cluster_number-k_number_min] += kmeans_cost_group
+            fair_silhouette_list[cluster_number-k_number_min] += silhouette_score(data,assignment)
+            kmeans_silhouette_list[cluster_number-k_number_min] += silhouette_score(data,kmeans_assign)
+            fair_DB_list += davies_bouldin_score(X=data,labels= assignment)
+            kmeans_DB_list += davies_bouldin_score(X=data,labels=kmeans_assign)
+
             with open(filename_result, 'a', encoding='utf-8') as f:
                 f.write("结果是：{}\n".format(function_result))
                 f.write("映射为{}\n".format(name2ix))
                 f.write("代价是{}\n".format(cost_group))
                 f.write("kmeans代价是{}\n".format(kmeans_cost_group))
+                f.write("fair-Lloyd轮廓系数为{}".format(silhouette_score(data,assignment)))
+                f.write("kmeans轮廓系数为{}".format(silhouette_score(data,kmeans_assign)))
+                f.write("fair-LLoyd的DB指数为{}".format(davies_bouldin_score(X=data,labels= assignment)))
+                f.write("Lloyd的DB指数为{}".format(davies_bouldin_score(X=data,labels=kmeans_assign)))
                 f.flush()
 
     for i in range(len(result_list)):
         result_list[i] /= enum_number
-        kmeans_result_list /= enum_number
+        kmeans_result_list[i] /= enum_number
+        kmeans_silhouette_list[i] /= enum_number
+        fair_silhouette_list[i] /= enum_number
+        fair_DB_list[i] /= enum_number
+        kmeans_DB_list[i] /= enum_number
 
 
     plt.figure()
@@ -92,7 +120,9 @@ def main():
     for group in unique_values:
 
         plt.plot(k_number, result_list[:,name2ix[group]], label=group)
-        plt.plot(k_number, kmeans_result_list[:, name2ix[group]], label='kmeans__'+group)
+
+    for group in unique_values:
+        plt.plot(k_number, kmeans_result_list[:, name2ix[group]], label='Lloyd_'+group)
 
     plt.xlabel('k')
     plt.ylabel('cost')
@@ -114,6 +144,24 @@ def main():
     plt.ylabel('cost')
     plt.legend()
     plt.savefig(Lloyd_fig)
+
+
+    plt.figure()
+    plt.plot(k_number,fair_silhouette_list,label = 'Fair_Lloyd')
+    plt.plot(k_number, kmeans_silhouette_list, label='Lloyd')
+    plt.xlabel('k')
+    plt.ylabel('silhouette')
+    plt.legend()
+    plt.savefig(silhouette_fig)
+
+    plt.figure()
+    plt.plot(k_number, fair_DB_list, label='Fair_Lloyd')
+    plt.plot(k_number, kmeans_DB_list, label='Lloyd')
+    plt.xlabel('k')
+    plt.ylabel('DB')
+    plt.legend()
+    plt.savefig(DB_fig)
+
 
     plt.show()
 
