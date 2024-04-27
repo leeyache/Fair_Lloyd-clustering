@@ -8,6 +8,10 @@ def optimal_centers(k,M_eta,group_size_number_list,alpha_matrix,group_index,data
     function_result = np.zeros(len(unique_values),dtype=int)
     lambda_adjust = 1/len(unique_values)
     inspect_every = len(unique_values)-1
+    if np.isnan(M_eta).any():
+        print("delta有空值")
+    # print("delta是否有空值{}\n".format(np.isnan(M_eta).any()))
+    # print("alpha是否有0值{}\n".format(np.any(alpha_matrix == 0)))
     delta_result = delta_function(data,M_eta,k,group_index,cur_assign,group_size_number_list,unique_values,name2ix)
 
     for e_number in range(enumrate_number):
@@ -18,9 +22,15 @@ def optimal_centers(k,M_eta,group_size_number_list,alpha_matrix,group_index,data
             max_index = function_result.argmax()
             min_index = find_min_index(function_result,lambda_list)
             if abs(function_result[max_index]-function_result[min_index])<epsilon:
+                if all(value == 1 / len(unique_values) for value in lambda_list):
+                    print("真是一次失败的遍历")
+                print("lambdalist的值是{}\n".format(lambda_list))
                 return np.array(optimal_centroids),function_result
             lambda_list[min_index] -= lambda_adjust * 2 ** (-e_number-1)
             lambda_list[max_index] += lambda_adjust * 2 ** (-e_number-1)
+    if all(value == 1 / len(unique_values) for value in lambda_list):
+        print("真是一次失败的遍历")
+    print("lambdalist的值是{}\n".format(lambda_list))
     return np.array(optimal_centroids),function_result
 # 计算F(x)函数
 def calculate_function(delta_result,centroids_minus_eta_result):
@@ -48,10 +58,15 @@ def delta_function(data,M_eta,k,group_index,cur_assign,group_size_number_list,un
     for group in unique_values:
         for i in range(k):
             group_in_cur_clustering = group_index[name2ix[group]] & (cur_assign == i)
-            distance = data[group_in_cur_clustering] - M_eta[name2ix[group]][i]
-            norms = np.sum(distance**2, axis=1)
+            if not sum(group_in_cur_clustering) == 0:
+                distance = data[group_in_cur_clustering] - M_eta[name2ix[group]][i]
+                norms = np.sum(distance ** 2, axis=1)
 
-            sum_distance = sum(norms)
+                sum_distance = sum(norms)
+
+            else:
+                sum_distance = 0
+
             delta_result[name2ix[group]] += sum_distance
 
         delta_result[name2ix[group]] /= group_size_number_list[name2ix[group]]
@@ -63,8 +78,20 @@ def centroids_minus_eta(k,M_eta,optimal_centroids,alpha_matrix,unique_values,nam
     centroids_minus_eta_result = np.zeros(len(unique_values))
 
     for group in unique_values:
+        group_index = name2ix[group]
         for i in range(k):
-            centroids_minus_eta_result[name2ix[group]] += alpha_matrix[name2ix[group]][i]*np.linalg.norm(optimal_centroids[i]-M_eta[name2ix[group]][i],ord=2)**2
+            # 获取当前组的 alpha 值
+            alpha_value = alpha_matrix[group_index][i]
+
+            # 获取最佳质心和 M_eta 的差异向量
+            centroid_difference = optimal_centroids[i] - M_eta[group_index][i]
+
+            # 计算差异向量的欧氏距离的平方
+            distance_squared = np.linalg.norm(centroid_difference, ord=2) ** 2
+
+            # 将 alpha 值乘以距离的平方，然后加到结果中
+            centroids_minus_eta_result[group_index] += alpha_value * distance_squared
+
     return centroids_minus_eta_result
 
 

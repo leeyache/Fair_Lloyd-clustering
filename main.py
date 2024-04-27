@@ -1,12 +1,9 @@
 import util.load
 import numpy as np
-import os
 import sys
 import matplotlib.pyplot as plt
-import time
 import util.load
 from sklearn.decomposition import PCA
-import pdb
 import ast
 import util.dataprocess
 import util.clustering_util
@@ -49,6 +46,8 @@ def main():
     # 用于存储结果的列表
     result_list = [np.zeros(len(df_fair_column.unique())) for _ in k_number ]
     result_list = np.array(result_list)
+    kmeans_result_list = [np.zeros(len(df_fair_column.unique())) for _ in k_number]
+    kmeans_result_list = np.array(result_list)
     #寻找当前最优中心点使用的参数
     epsilon = config_parser[config_name].getfloat('epsilon')
     T = config_parser[config_name].getint('T')
@@ -56,7 +55,12 @@ def main():
     enum_number = int(sys.argv[2])
     filename_result = 'Result\\'+config_name+'_'+fair_column+'_' + str(enum_number)+'_'+str(k_number_min)+'_'+str(k_number_max)+'_result.txt'
     fig_name = 'Result\\'+config_name+'_'+fair_column + '_' + str(enum_number) + '_' + str(k_number_min) + '_' + str(
-        k_number_max) + 'Fair_Floyd_cost.png'
+        k_number_max) + 'Lloyd_and_Fair_Lloyd_cost.png'
+    Lloyd_fig = 'Result\\'+config_name+'_'+fair_column + '_' + str(enum_number) + '_' + str(k_number_min) + '_' + str(
+        k_number_max) + 'Lloyd_cost.png'
+    Fair_Lloyd_fig = 'Result\\'+config_name+'_'+fair_column + '_' + str(enum_number) + '_' + str(k_number_min) + '_' + str(
+        k_number_max) + 'Fair_Lloyd_cost.png'
+
     if PCAUse:
         pca_number = config_parser[config_name].getint('PCA_number')
         pca = PCA(n_components=pca_number)
@@ -66,26 +70,51 @@ def main():
     for _ in range(enum_number):
         for cluster_number in k_number:
 
-            assignment,centroids,group_index,name2ix,function_result,unique_values,M_eta,alpha_matrix,group_size_number_list = Fair_Lloyd.Fair_Lloyd(data,cluster_number,df_fair_column,epsilon,T)
+            assignment,centroids,group_index,name2ix,function_result,unique_values,M_eta,alpha_matrix,group_size_number_list,kmeans_assign,kmeans_centroids = Fair_Lloyd.Fair_Lloyd(data,cluster_number,df_fair_column,epsilon,T)
             result_list[cluster_number-k_number_min] += function_result
             cost_group = util.clustering_util.caculate_cost(cluster_number,data,centroids,group_index,assignment,name2ix,unique_values)
+            kmeans_cost_group = util.clustering_util.caculate_cost(cluster_number,data,kmeans_centroids,group_index,kmeans_assign,name2ix,unique_values)
+            kmeans_result_list[cluster_number-k_number_min] += kmeans_cost_group
             with open(filename_result, 'a', encoding='utf-8') as f:
                 f.write("结果是：{}\n".format(function_result))
                 f.write("映射为{}\n".format(name2ix))
                 f.write("代价是{}\n".format(cost_group))
+                f.write("kmeans代价是{}\n".format(kmeans_cost_group))
                 f.flush()
 
     for i in range(len(result_list)):
         result_list[i] /= enum_number
+        kmeans_result_list /= enum_number
+
+
+    plt.figure()
+
     for group in unique_values:
 
         plt.plot(k_number, result_list[:,name2ix[group]], label=group)
+        plt.plot(k_number, kmeans_result_list[:, name2ix[group]], label='kmeans__'+group)
+
     plt.xlabel('k')
     plt.ylabel('cost')
-    # 设置纵坐标轴范围为1到2，且严格限制在1到2之间
-    # plt.ylim(1.6, 2.5)
     plt.legend()
     plt.savefig(fig_name)
+
+    plt.figure()
+    for group in unique_values:
+        plt.plot(k_number, result_list[:, name2ix[group]], label=group)
+    plt.xlabel('k')
+    plt.ylabel('cost')
+    plt.legend()
+    plt.savefig(Fair_Lloyd_fig)
+
+    plt.figure()
+    for group in unique_values:
+        plt.plot(k_number, kmeans_result_list[:, name2ix[group]], label=group)
+    plt.xlabel('k')
+    plt.ylabel('cost')
+    plt.legend()
+    plt.savefig(Lloyd_fig)
+
     plt.show()
 
 if __name__ == '__main__':
